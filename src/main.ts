@@ -1,5 +1,6 @@
 import { getInput, setFailed } from "@actions/core";
-import { context, GitHub } from "@actions/github";
+import { context, getOctokit } from "@actions/github";
+import { GitHub } from "@actions/github/lib/utils";
 // @ts-ignore
 import table from "markdown-table";
 import Term from "./Term";
@@ -8,13 +9,12 @@ import SizeLimit from "./SizeLimit";
 const SIZE_LIMIT_HEADING = `## size-limit report 📦 `;
 
 async function fetchPreviousComment(
-  octokit: GitHub,
+  octokit: InstanceType<typeof GitHub>,
   repo: { owner: string; repo: string },
   pr: { number: number }
 ) {
   // TODO: replace with octokit.issues.listComments when upgraded to v17
-  const commentList = await octokit.paginate(
-    "GET /repos/:owner/:repo/issues/:issue_number/comments",
+  const commentList = await octokit.rest.issues.listComments(
     {
       ...repo,
       // eslint-disable-next-line camelcase
@@ -22,7 +22,7 @@ async function fetchPreviousComment(
     }
   );
 
-  const sizeLimitComment = commentList.find(comment =>
+  const sizeLimitComment = commentList.data.find(comment =>
     comment.body.startsWith(SIZE_LIMIT_HEADING)
   );
   return !sizeLimitComment ? null : sizeLimitComment;
@@ -47,7 +47,7 @@ async function run() {
     const directory = getInput("directory") || process.cwd();
     const windowsVerbatimArguments =
       getInput("windows_verbatim_arguments") === "true" ? true : false;
-    const octokit = new GitHub(token);
+    const octokit = getOctokit(token);
     const term = new Term();
     const limit = new SizeLimit();
 
@@ -92,7 +92,7 @@ async function run() {
 
     if (!sizeLimitComment) {
       try {
-        await octokit.issues.createComment({
+        await octokit.rest.issues.createComment({
           ...repo,
           // eslint-disable-next-line camelcase
           issue_number: pr.number,
@@ -105,7 +105,7 @@ async function run() {
       }
     } else {
       try {
-        await octokit.issues.updateComment({
+        await octokit.rest.issues.updateComment({
           ...repo,
           // eslint-disable-next-line camelcase
           comment_id: sizeLimitComment.id,
